@@ -1,0 +1,72 @@
+classdef WaterPlantSystem
+    properties
+        microcontroller;
+        dht20Obj;
+        moistureSensorPin;
+        pumpSensorPin;
+        lightPin;
+        soundPin;
+        startTime;
+        h;
+        ax;
+    end
+    methods
+        function obj = WaterPlantSystem(microcontroller, dht20Obj, moistureSensorPin, pumpSensorPin, lightPin, soundPin)
+            obj.microcontroller = microcontroller;
+            obj.dht20Obj = dht20Obj;
+            obj.moistureSensorPin = moistureSensorPin;
+            obj.pumpSensorPin = pumpSensorPin;
+            obj.lightPin = lightPin;
+            obj.soundPin = soundPin;
+            dlog("info", "Water Plant System Initialized. Awaiting orders.")
+
+            % Also create the graph
+            figure;
+            obj.h = animatedline;
+            obj.ax = gca;
+            obj.ax.YGrid = 'on';
+            obj.ax.YLim = [0 100];
+            title("Moisture vs time");
+            xlabel('Time [HH:MM:SS]');
+            ylabel('Moisture [%], Lower is Dryer; Higher is Wetter');
+            obj.startTime = datetime('now');
+        end
+        function [moisture, obj] = getMoisture (obj)
+            % Formula: y = -112.36x + 286.51
+            a = -112.36;
+            b = 386.52;
+            moisture = a*readVoltage(obj.microcontroller, obj.moistureSensorPin) + b;
+        end
+        function [tempF, obj] = getTemperatureF(obj)
+            tempF = obj.dht20Obj.readTemperature * (9/5) + 32;
+        end
+        function [ ] = turnOnPump (obj, seconds, cooldown)
+            writeDigitalPin(obj.microcontroller, obj.pumpSensorPin, 1);
+            dlog("info", strcat("Pump is ON for ", string(seconds), " seconds"));
+            pause(seconds);
+            writeDigitalPin(obj.microcontroller, obj.pumpSensorPin, 0);
+            dlog("info", strcat("Pump is OFF. Cooling down for ", string(cooldown), " seconds"));
+            pause(cooldown);
+        end
+        function [ ] = forcePumpOff (obj)
+            dlog("info", strcat("Forced pump off"))
+            writeDigitalPin(obj.microcontroller, obj.pumpSensorPin, 0);
+        end
+        function [ ] = updateGraph (obj)
+            t = datetime('now')  - obj.startTime;
+            addpoints(obj.h, datenum(t), getMoisture(obj))
+            obj.ax.XLim = datenum([t-seconds(15) t]);
+            datetick('x', 'keeplimits')
+            drawnow
+        end
+        function [ ] = turnOnLight (obj)
+            writeDigitalPin(obj.microcontroller, obj.lightPin, 1);
+        end
+        function [ ] = turnOffLight (obj)
+            writeDigitalPin(obj.microcontroller, obj.lightPin, 0);
+        end
+        function [ ] = playSound (obj)
+            playTone(obj.microcontroller, obj.soundPin, 2000, 0.1);
+        end
+    end
+end
